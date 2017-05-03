@@ -1,0 +1,164 @@
+---
+title: "Shakespeare SOMs"
+author: Daniel Tanner
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+   toc: True
+   toc_depth: 2
+   toc_float: True
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
+```
+
+#GET Shakespeare DATA
+
+##get play index table
+```{r}
+library("RCurl")
+play_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/play_table.csv"), sep=",", header=T, check.names = FALSE)
+```
+
+##Read in play text
+```{r}
+library("readr")
+for (row in row.names(play_table)){
+  play_table[row, "text"] <- read_file(as.character(play_table[row,"path"]) , locale(encoding = "UTF-16"))
+}
+remove(row)
+```
+
+##Clean out bracketed tags
+
+```{r}
+play_table$text <- gsub('<[^>]*>','', play_table$text)
+```
+
+#Form & Clean Corpus
+
+Form into corpus:
+```{r form corpus}
+library("tm")
+
+play.vec <- VectorSource(play_table[,"text"])
+play.corpus <- Corpus(play.vec)
+```
+
+Next we want to really clean up our texts. The tm package has functions for stripping punctuation, numbers, whitespace, the most common words (we don't want to be comparing counts of "and" and "to"), and converting everything to lowercase. We'll also use a function from the `SnowballC` package to cut words down to common stems for comparison.
+
+_Note: this may take a few minutes to run._
+```{r clean corpus 1}
+library("SnowballC")
+
+play.corpus <- tm_map(play.corpus, removePunctuation)
+play.corpus <- tm_map(play.corpus, removeNumbers)
+play.corpus <- tm_map(play.corpus, tolower)
+play.corpus <- tm_map(play.corpus, removeWords, stopwords("english"))
+play.corpus <- tm_map(play.corpus, stemDocument)
+play.corpus <- tm_map(play.corpus, stripWhitespace)
+play.corpus <- tm_map(play.corpus, PlainTextDocument)
+play.corpus <- tm_map(play.corpus, removePunctuation)
+```
+
+Let's check out what some of the cleaned text looks like:
+```{r inspect cleaned text}
+substr(inspect(play.corpus[12]),1,500)
+```
+
+The functions that rely on english dictionaries had a bit of trouble with the Shakespearean English, but they're close enough.
+
+##Document Term Matrix
+Add in metadata for plotting
+
+```{r make document term matrix}
+play.DTM <- DocumentTermMatrix(play.corpus)
+```
+
+##Restrict to common words
+so matrix not super sparse
+
+```{r}
+play.DTM.modified <- removeSparseTerms(play.DTM, 0.8)
+```
+
+
+##Normalize rows
+- make each a length 1 vector
+-add attributes for plotting
+```{r}
+play.DTM.modified <- t(apply(play.DTM.modified, 1, function(x) x / sqrt(sum(x^2)) ))
+attr(play.DTM.modified, "name") <- play_table$name
+attr(play.DTM.modified, "genre") <- play_table$genre
+
+```
+
+
+
+#SOM!
+
+```{r}
+library(kohonen)
+
+play.SOM <- som(scale(play.DTM.modified), grid = somgrid(6,6, "hexagonal"),  toroidal = FALSE)
+plot(play.SOM)
+```
+
+```{r}
+plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(play.DTM.modified, "genre"))], bgcol = "lightgray", labels = attr(play.DTM.modified, "name"))
+```
+
+
+This is not a particularly clean or useful visualization. There are two main problems that we will address below.
+* There are too many labeled points, which become illegible.
+* The gray backgrounds of teh cells don't communicate anything. It would be nice if they could be used to convey distance of a cell to it's negihbors, like in the `dist.neighbours` type SOMs.
+
+First, we'll just make a list of the plays we want labeled, and represent the rest with *x*.
+
+```{r}
+plays.to.plot <- c("Romeo And Juliet", "Julius Caesar", "King Lear", "Macbeth", "Othello, the Moor of Venice", "The Tragedy of King Richard II", "The Tragedy of King Richard III", "The Tempest", "The Taming of the Shrew")
+play.labels <- c()
+X <- as.vector(attr(play.DTM.modified, "name"))
+for (i in 1:37){
+  if (X[i] %in% plays.to.plot){play.labels[i] <- X[i]}
+  else{play.labels[i]<-"x"}
+}
+```
+
+Next, we want to essentially combine two types of kohonen SOM functions, `mapping` and `dist.neighbours`. TO do this we will write our own function to calculate the distance of a cell's representative vector to all others, strongly weighing the neighboring cells. We'll then use this do set the background color using the `mapping` type SOM.
+
+```{r}
+code.distances <- function(SOM){
+  N <- nrow(SOM$codes)
+  #calculate all pairwise distances
+  pairwise.distances = c()
+  for (i in 1:N){
+    list <- matrix()
+    for (j in 1:N){
+      list[j] <- dist(rbind(SOM$codes[i,],SOM$codes[j,]))
+    }
+    pairwise.distances <- cbind(pairwise.distances, list)
+  }
+  
+  ##distance coefficient function, to be applied to geometric GRID distances
+  d.coef<-function(x){
+    if (x == 0){return(0)}
+    else{return(1/(x^4))}
+    }
+  distance.coefficients <- apply(kohonen::unit.distances(SOM$grid, SOM$toroidal),c(1,2),d.coef)
+  
+  #calculate scaled sum of distances
+  A<-distance.coefficients*pairwise.distances
+  scaled.dist.sums <- colSums(A)/max(colSums(A))
+  
+  return(scaled.dist.sums)
+}
+```
+
+Putting it all together:
+
+```{r}
+plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(play.DTM.modified, "genre"))], bgcol = hsv(h=0,s=0,v=code.distances(play.SOM)), labels = play.labels)
+```
+
+
