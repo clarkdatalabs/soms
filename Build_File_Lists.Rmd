@@ -1,0 +1,97 @@
+---
+title: "TITLE"
+author: Daniel Tanner
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+   toc: True
+   toc_depth: 2
+   toc_float: True
+  pdf_document: default
+   toc: True
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
+```
+
+List all the plays under column "name"
+```{r}
+root <- "C:/Users/DJT/Dropbox/workspace/SOM/Shakespeare Example/plays_by_genre"
+genres <- list.dirs(root, full.names = FALSE)[2:4]
+play_table <- data.frame()
+for (genre in genres){
+  
+  plays <- data.frame(list.files(path = paste(root, genre, sep = "/")), genre)
+  play_table <- rbind(play_table, plays)
+}
+
+names(play_table)[1] <- "name"
+
+play_table$name <- gsub('.txt','', play_table$name)
+```
+
+```{r}
+library("readr")
+root <- "https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/plays_by_genre"
+
+#make play paths
+play_table <- within(play_table, path <- apply(as.matrix(paste(root, genre, paste(name,'.txt', sep = ""), sep = "/" )),1,URLencode))
+
+```
+
+save play_table
+```{r}
+write.csv(play_table, file = "play_table.csv", row.names = FALSE)
+```
+
+
+
+Example of reading text file contents from GitHub:
+```{r}
+library("readr")
+playText <- read_file("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/plays_by_genre/comedies/A%20Midsummer-Night's%20Dream.txt", locale(encoding = "UTF-16"))
+```
+
+
+Make character_table
+
+```{r}
+#initialize table
+character_table <- data.frame(character=character(),
+                              play=character(),
+                              genre=character(),
+                              text=character())
+
+#populate character names
+root <- "C:/Users/DJT/Dropbox/workspace/SOM/soms/Shakespeare_txt"
+
+for (play in play_table$name){
+  genre <- play_table[play_table$name == play, "genre"]
+  characters <- data.frame(list.files(path = paste(root, genre, paste(play, "_characters", sep = ""), sep = "/")))
+  
+  character_table <- rbind(character_table, cbind(characters, play, genre))
+}
+
+colnames(character_table)[1] <- "character"
+
+#make play paths
+root.git <- "https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt"
+
+character_table <- within(character_table, path <- apply(as.matrix(paste(root.git, genre, paste(play,'_characters', sep = ""), character, sep = "/" )),1,URLencode))
+
+#strip .txt extension from character names
+character_table$character <- gsub('.txt','', character_table$character)
+
+```
+
+```{r}
+write.csv(character_table, file = "character_table.csv", row.names = FALSE)
+```
+
+Example of reading text file contents from GitHub:
+```{r}
+library("readr")
+playText <- read_file(as.character(character_table[1,"path"]), locale(encoding = "UTF-16"))
+```
+
+
