@@ -162,3 +162,135 @@ plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(
 ```
 
 
+
+#Character SOM
+
+```{r}
+library("RCurl")
+character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/character_table.csv"), sep=",", header=T, check.names = FALSE, stringsAsFactors = FALSE)
+```
+
+#DELETE Characters with AE in NAME!!!!
+FIX THIS LATER!!
+
+```{r}
+#character_table <- character_table[-c(238,416,543,654,938,962,988,1089,1323),]
+```
+
+
+
+##Read in character lines
+
+There are some errors accessing the text files with unicode characters in their names. I'll just throw some error handling around this and drop these characters from consideration.
+
+```{r}
+library("readr")
+for (row in row.names(character_table)){
+  tryCatch({
+    character_table[row, "text"] <- read_file(as.character(character_table[row,"path"]) , locale(encoding = "UTF-16"))
+  }, error=function(e){print(row)})
+}
+remove(row)
+```
+
+```{r}
+character_table <- character_table[!is.na(character_table$text),]
+```
+
+
+Let's look at the metadata we have for each text file of lines:
+
+```{r}
+head(character_table[,c("character", "play", "genre")], 10)
+```
+
+Note the [*dramatis_personae*](https://en.wikipedia.org/wiki/Dramatis_person%C3%A6) character. Each play has one of these documents, which is just a list of characters and contains no lines. Let's get rid of them.
+
+```{r}
+character_table <- subset(character_table, character!="dramatis_personae")
+```
+
+
+The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text above, so we follow the same procedure to simplify it.
+
+##Clean out bracketed tags
+
+```{r}
+character_table$text <- gsub('<[^>]*>','', character_table$text)
+```
+
+#Form & Clean Corpus
+
+Form into corpus:
+```{r form corpus}
+library("tm")
+character.corpus <- Corpus(VectorSource(character_table[,"text"]))
+```
+
+_Note: this may take a few minutes to run._
+```{r clean character corpus}
+library("SnowballC")
+
+character.corpus <- tm_map(character.corpus, removePunctuation)
+character.corpus <- tm_map(character.corpus, removeNumbers)
+character.corpus <- tm_map(character.corpus, tolower)
+character.corpus <- tm_map(character.corpus, removeWords, stopwords("english"))
+character.corpus <- tm_map(character.corpus, stemDocument)
+character.corpus <- tm_map(character.corpus, stripWhitespace)
+character.corpus <- tm_map(character.corpus, PlainTextDocument)
+character.corpus <- tm_map(character.corpus, removePunctuation)
+```
+
+
+
+##Doc Term Matrix
+
+```{r}
+character.DTM <- DocumentTermMatrix(character.corpus)
+```
+
+
+##Reduce Sparseness
+
+```{r}
+character.DTM.modified <- removeSparseTerms(character.DTM, 0.8)
+```
+
+##Normalize
+
+```{r}
+character.DTM.modified <- t(apply(character.DTM.modified, 1, function(x) x/sqrt(sum(x^2))))
+attr(character.DTM.modified, "character") <- character_table$character
+attr(character.DTM.modified, "genre") <- character_table$genre
+```
+
+strip NANs -----BLAH
+```{r}
+#####X <- character.DTM.modified[!is.na(character.DTM.modified[,1]),]
+```
+
+
+##PLOT!
+
+First we make our SOM
+```{r}
+library(kohonen)
+character.SOM <- som(scale(character.DTM.modified), grid = somgrid(30, 30, "hexagonal"), toroidal = FALSE)
+```
+
+```{r}
+characters.to.plot <- c("Romeo", "Julius Caesar", "King Lear", "Macbeth", 
+    "Othello", "Puck")
+character.labels <- c()
+X <- as.vector(attr(character.DTM.modified, "character"))
+for (i in 1:length(X)) {
+    if (X[i] %in% characters.to.plot) {
+        character.labels[i] <- X[i]
+    } else {
+        character.labels[i] <- "x"
+    }
+}
+
+```
+
+
