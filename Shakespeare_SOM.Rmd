@@ -194,7 +194,7 @@ remove(row)
 ```
 
 ```{r}
-character_table <- character_table[!is.na(character_table$text),]
+#character_table <- character_table[!is.na(character_table$text),]
 ```
 
 
@@ -209,7 +209,6 @@ Note the [*dramatis_personae*](https://en.wikipedia.org/wiki/Dramatis_person%C3%
 ```{r}
 character_table <- subset(character_table, character!="dramatis_personae")
 ```
-
 
 The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text above, so we follow the same procedure to simplify it.
 
@@ -250,32 +249,49 @@ character.DTM <- DocumentTermMatrix(character.corpus)
 ```
 
 
+##TF-IDF - SHOULD I USE THIS INSTEAD OF WEIGHTING?
+```{r}
+#test.DTM <- DocumentTermMatrix(character.corpus, control = list(weighting = weightTfIdf))
+```
+
 ##Reduce Sparseness
+For the character text mining we want to use a much higher sparse factor. We have far fewer words to work with for each character (compared to entire plays). We don't want to eliminate too many words.
 
 ```{r}
-character.DTM.modified <- removeSparseTerms(character.DTM, 0.8)
+character.DTM.modified <- removeSparseTerms(character.DTM, 0.99)
+
+attr(character.DTM, "character") <- character_table$character
+attr(character.DTM, "genre") <- character_table$genre
+row.names(character.DTM.modified) <- character_table$character
+```
+
+Let's see what this did to the wordcounts for some of our characters.
+```{r}
+wordcount.DTM <- rowSums(as.matrix(character.DTM))
+wordcount.DTM.modified <- rowSums(as.matrix(character.DTM.modified))
+
+head(cbind("DTM" = wordcount.DTM,
+           "DTM.modified" = wordcount.DTM.modified), 10)
+```
+
+Overall this seems to have cut a fair number of words out of each character's wordcount. Also note that there are some characters don't have many lines at all. Let's exclude characters that have fewer than 30 filtered words.
+
+```{r}
+character.DTM.modified <- character.DTM.modified[wordcount.DTM.modified>29, ]
 ```
 
 ##Normalize
 
 ```{r}
 character.DTM.modified <- t(apply(character.DTM.modified, 1, function(x) x/sqrt(sum(x^2))))
-attr(character.DTM.modified, "character") <- character_table$character
-attr(character.DTM.modified, "genre") <- character_table$genre
-```
-
-strip NANs -----BLAH
-```{r}
-#####X <- character.DTM.modified[!is.na(character.DTM.modified[,1]),]
 ```
 
 
 ##PLOT!
-
 First we make our SOM
 ```{r}
 library(kohonen)
-character.SOM <- som(scale(character.DTM.modified), grid = somgrid(30, 30, "hexagonal"), toroidal = FALSE)
+character.SOM <- som(scale(character.DTM.modified), grid = somgrid(25, 25, "hexagonal"), toroidal = FALSE)
 ```
 
 ```{r}

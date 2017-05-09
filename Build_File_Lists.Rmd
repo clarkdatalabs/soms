@@ -90,7 +90,10 @@ write.csv(character_table, file = "character_table.csv", row.names = FALSE)
 Example of reading text file contents from GitHub:
 ```{r}
 library("readr")
-playText <- read_file(as.character(character_table[1,"path"]), locale(encoding = "UTF-16"))
+playText <- read_file(as.character(character_table[238,"path"]), locale(encoding = "UTF-16"))
 ```
 
-
+```{r}
+library("readr")
+playText <- read_file(URLdecode(character_table[238,"path"]), locale(encoding = "UTF-16"))
+```
