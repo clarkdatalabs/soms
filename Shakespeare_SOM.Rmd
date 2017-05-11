@@ -12,22 +12,51 @@ output:
 knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
 ```
 
-#GET Shakespeare DATA
+#Downloading Shakespeare Text
+The following downloads a zipped folder containing all of the text of 37 of Shakespeare's plays (originally [available at lexically.net](http://lexically.net/wordsmith/support/shakespeare.html)).
 
-##get play index table
 ```{r}
-library("RCurl")
-play_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/play_table.csv"), sep=",", header=T, check.names = FALSE)
+
+td <- tempdir() 
+tf <- tempfile(tmpdir=td)
+#download.file("http://lexically.net/downloads/corpus_linguistics/ShakespearePlaysPlus.zip", tf)
+
+download.file("https://github.com/clarkdatalabs/soms/raw/master/ShakespearePlaysPlus.zip", tf)
+
+#https://github.com/clarkdatalabs/soms/blob/master/ShakespearePlaysPlus.zip?raw=true
+
+
+fname <- unzip(tf, list=TRUE)$Name[1] 
+unzip(tf, exdir=td, overwrite=TRUE) 
+fpath <- file.path(td, fname)
+remove(fname)
+unlink(tf)
 ```
 
-##Read in play text
+The next level of subdirectory is the play genre.
+```{r}
+genres <- list.dirs(fpath, full.names = FALSE, recursive = FALSE)
+```
+
+We want to read in all of the play text while saving play names and genres as metadata.
+
 ```{r}
 library("readr")
-for (row in row.names(play_table)){
-  play_table[row, "text"] <- read_file(as.character(play_table[row,"path"]) , locale(encoding = "UTF-16"))
+play_table <- data.frame(play=character(),
+                         genre=character(),
+                         text=character())
+
+for (genre in genres){
+  plays <- list.files(file.path(fpath,genre), pattern = ".txt")
+  for (play in plays){
+    text <- read_file(file.path(fpath,genre,play), locale(encoding = "UTF-16"))
+    play.name <- gsub('.txt','', play)
+    play_table <- rbind(play_table, data.frame(play = play.name, genre = genre, text = text))
+  }
 }
-remove(row)
+remove(genre, plays, play, play.name, text)
 ```
+
 
 ##Clean out bracketed tags
 
@@ -88,7 +117,7 @@ play.DTM.modified <- removeSparseTerms(play.DTM, 0.8)
 -add attributes for plotting
 ```{r}
 play.DTM.modified <- t(apply(play.DTM.modified, 1, function(x) x / sqrt(sum(x^2)) ))
-attr(play.DTM.modified, "name") <- play_table$name
+attr(play.DTM.modified, "play") <- play_table$play
 attr(play.DTM.modified, "genre") <- play_table$genre
 
 ```
@@ -105,7 +134,7 @@ plot(play.SOM)
 ```
 
 ```{r}
-plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(play.DTM.modified, "genre"))], bgcol = "lightgray", labels = attr(play.DTM.modified, "name"))
+plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(play.DTM.modified, "genre"))], bgcol = "lightgray", labels = attr(play.DTM.modified, "play"))
 ```
 
 
@@ -118,7 +147,7 @@ First, we'll just make a list of the plays we want labeled, and represent the re
 ```{r}
 plays.to.plot <- c("Romeo And Juliet", "Julius Caesar", "King Lear", "Macbeth", "Othello, the Moor of Venice", "The Tragedy of King Richard II", "The Tragedy of King Richard III", "The Tempest", "The Taming of the Shrew")
 play.labels <- c()
-X <- as.vector(attr(play.DTM.modified, "name"))
+X <- as.vector(attr(play.DTM.modified, "play"))
 for (i in 1:37){
   if (X[i] %in% plays.to.plot){play.labels[i] <- X[i]}
   else{play.labels[i]<-"x"}
@@ -165,7 +194,7 @@ plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(
 
 #Character SOM
 
-```{r}
+```{r, indclude = FALSE, eval = FALSE}
 library("RCurl")
 character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/character_table.csv"), sep=",", header=T, check.names = FALSE, stringsAsFactors = FALSE)
 ```
@@ -183,7 +212,7 @@ FIX THIS LATER!!
 
 There are some errors accessing the text files with unicode characters in their names. I'll just throw some error handling around this and drop these characters from consideration.
 
-```{r}
+```{r, indclude = FALSE, eval = FALSE}
 library("readr")
 for (row in row.names(character_table)){
   tryCatch({
@@ -196,6 +225,16 @@ remove(row)
 ```{r}
 #character_table <- character_table[!is.na(character_table$text),]
 ```
+
+
+###
+DOWNLOAD CHAR TABLE
+```{r}
+library("RCurl")
+character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/CHAR.csv"), sep=",", header=T, check.names = FALSE, stringsAsFactors = FALSE)
+```
+
+
 
 
 Let's look at the metadata we have for each text file of lines:
@@ -221,7 +260,7 @@ character_table$text <- gsub('<[^>]*>','', character_table$text)
 #Form & Clean Corpus
 
 Form into corpus:
-```{r form corpus}
+```{r}
 library("tm")
 character.corpus <- Corpus(VectorSource(character_table[,"text"]))
 ```
@@ -258,7 +297,7 @@ character.DTM <- DocumentTermMatrix(character.corpus)
 For the character text mining we want to use a much higher sparse factor. We have far fewer words to work with for each character (compared to entire plays). We don't want to eliminate too many words.
 
 ```{r}
-character.DTM.modified <- removeSparseTerms(character.DTM, 0.99)
+character.DTM.modified <- removeSparseTerms(character.DTM, 0.90)
 
 attr(character.DTM, "character") <- character_table$character
 attr(character.DTM, "genre") <- character_table$genre
@@ -277,7 +316,7 @@ head(cbind("DTM" = wordcount.DTM,
 Overall this seems to have cut a fair number of words out of each character's wordcount. Also note that there are some characters don't have many lines at all. Let's exclude characters that have fewer than 30 filtered words.
 
 ```{r}
-character.DTM.modified <- character.DTM.modified[wordcount.DTM.modified>29, ]
+character.DTM.modified <- character.DTM.modified[wordcount.DTM.modified>200, ]
 ```
 
 ##Normalize
@@ -291,22 +330,39 @@ character.DTM.modified <- t(apply(character.DTM.modified, 1, function(x) x/sqrt(
 First we make our SOM
 ```{r}
 library(kohonen)
-character.SOM <- som(scale(character.DTM.modified), grid = somgrid(25, 25, "hexagonal"), toroidal = FALSE)
+character.SOM <- som(scale(character.DTM.modified), grid = somgrid(10, 10, "hexagonal"), toroidal = TRUE)
 ```
 
+Make label matrix
 ```{r}
-characters.to.plot <- c("Romeo", "Julius Caesar", "King Lear", "Macbeth", 
+
+
+char.info <- character_table[character_table$character %in% attributes(character.DTM.modified)$dimnames$Docs,c("character", "play", "genre")]
+
+library(stringi)
+characters.to.plot <- c("Romeo", "Juliet", "K. Henry", "Macbeth", "Hermia",
     "Othello", "Puck")
 character.labels <- c()
-X <- as.vector(attr(character.DTM.modified, "character"))
+X <- stri_trans_totitle(attributes(character.DTM.modified)$dimnames$Docs)
 for (i in 1:length(X)) {
     if (X[i] %in% characters.to.plot) {
         character.labels[i] <- X[i]
     } else {
-        character.labels[i] <- "x"
+        character.labels[i] <- "+"
     }
 }
 
 ```
 
+#Plot characters
+```{r}
+plot(character.SOM, type = "mapping", bgcol = hsv(h=0,s=0,v=code.distances(character.SOM)), labels = character.labels)
+```
 
+
+
+
+#Clean up Workspace
+```{r}
+unlink(td, recursive = FALSE)
+```

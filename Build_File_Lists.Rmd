@@ -53,6 +53,26 @@ library("readr")
 playText <- read_file(as.character(play_table[1,"path"]), locale(encoding = "UTF-16"))
 ```
 
+#Read in play text from index table
+
+##get play index table
+```{r}
+library("RCurl")
+play_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/play_table.csv"), sep=",", header=T, check.names = FALSE)
+```
+
+##Read in play text
+```{r}
+library("readr")
+for (row in row.names(play_table)){
+  play_table[row, "text"] <- read_file(as.character(play_table[row,"path"]) , locale(encoding = "UTF-16"))
+}
+remove(row)
+```
+
+
+
+
 
 #Create character_table
 

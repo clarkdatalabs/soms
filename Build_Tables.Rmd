@@ -1,0 +1,93 @@
+---
+title: "Build Tables"
+author: Daniel Tanner
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+   toc: True
+   toc_depth: 2
+   toc_float: True
+  pdf_document: default
+   toc: True
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
+```
+
+#Downloading Shakespeare Text
+The following downloads a zipped folder containing all of the text of 37 of Shakespeare's plays (originally [available at lexically.net](http://lexically.net/wordsmith/support/shakespeare.html)).
+
+```{r}
+td <- tempdir() 
+tf <- tempfile(tmpdir=td)
+download.file("https://github.com/clarkdatalabs/soms/raw/master/ShakespearePlaysPlus.zip", tf)
+
+fname <- unzip(tf, list=TRUE)$Name[1] 
+unzip(tf, exdir=td, overwrite=TRUE) 
+fpath <- file.path(td, fname)
+remove(fname)
+unlink(tf)
+```
+```{r}
+genres <- list.dirs(fpath, full.names = FALSE, recursive = FALSE)
+```
+
+
+#Make play_table
+
+```{r}
+library("readr")
+play_table <- data.frame(play=character(),
+                         genre=character(),
+                         text=character())
+
+for (genre in genres){
+  plays <- list.files(file.path(fpath,genre), pattern = ".txt")
+  for (play in plays){
+    text <- read_file(file.path(fpath,genre,play), locale(encoding = "UTF-16"))
+    play.name <- gsub('.txt','', play)
+    play_table <- rbind(play_table, data.frame(play = play.name, genre = genre, text = text))
+  }
+}
+remove(genre, plays, play, play.name, text)
+```
+
+
+#Make character_table
+
+```{r}
+library("readr")
+library("stringi")
+
+character_table <- data.frame(char = character(),
+                              play=character(),
+                              genre=character(),
+                              text=character())
+
+for (genre in genres){
+  plays <- list.dirs(file.path(fpath,genre), full.names = FALSE, recursive = FALSE)
+    for (play in plays){
+      play.name <- gsub('_character','', play)
+      chars <- list.files(file.path(fpath,genre,play), pattern = ".txt")
+      for (char in chars){
+        text <- read_file(file.path(fpath,genre,play,char), locale(encoding = "UTF-16"))
+        char.name <- stri_trans_totitle(gsub('.txt','', char))
+        character_table <- rbind(character_table, data.frame(char = char.name,
+                                                             play = play.name,
+                                                             genre = genre,
+                                                             text = text))
+      }
+    }
+}
+remove(genre, plays, play, play.name, chars, char, char.name, text)
+```
+
+```{r}
+write.csv(character_table, file = "character_table.csv", row.names = FALSE)
+```
+
+#Clean up Workspace
+```{r}
+unlink(td, recursive = FALSE)
+remove(fpath, genres, td, tf)
+```
