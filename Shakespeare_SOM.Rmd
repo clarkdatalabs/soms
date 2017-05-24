@@ -16,7 +16,6 @@ knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FA
 The following downloads a zipped folder containing all of the text of 37 of Shakespeare's plays (originally [available at lexically.net](http://lexically.net/wordsmith/support/shakespeare.html)).
 
 ```{r}
-
 td <- tempdir() 
 tf <- tempfile(tmpdir=td)
 #download.file("http://lexically.net/downloads/corpus_linguistics/ShakespearePlaysPlus.zip", tf)
@@ -57,14 +56,17 @@ for (genre in genres){
 remove(genre, plays, play, play.name, text)
 ```
 
+##Clean up Workspace
+```{r}
+unlink(td, recursive = FALSE)
+```
 
-##Clean out bracketed tags
+#Forming & Cleaning a Corpus
 
+tags
 ```{r}
 play_table$text <- gsub('<[^>]*>','', play_table$text)
 ```
-
-#Form & Clean Corpus
 
 Form into corpus:
 ```{r form corpus}
@@ -82,17 +84,16 @@ library("SnowballC")
 
 play.corpus <- tm_map(play.corpus, removePunctuation)
 play.corpus <- tm_map(play.corpus, removeNumbers)
-play.corpus <- tm_map(play.corpus, tolower)
+play.corpus <- tm_map(play.corpus, content_transformer(tolower))
 play.corpus <- tm_map(play.corpus, removeWords, stopwords("english"))
 play.corpus <- tm_map(play.corpus, stemDocument)
 play.corpus <- tm_map(play.corpus, stripWhitespace)
-play.corpus <- tm_map(play.corpus, PlainTextDocument)
 play.corpus <- tm_map(play.corpus, removePunctuation)
 ```
 
 Let's check out what some of the cleaned text looks like:
 ```{r inspect cleaned text}
-substr(inspect(play.corpus[12]),1,500)
+substr(inspect(play.corpus[10]),1,500)
 ```
 
 The functions that rely on english dictionaries had a bit of trouble with the Shakespearean English, but they're close enough.
@@ -112,8 +113,9 @@ play.DTM.modified <- removeSparseTerms(play.DTM, 0.8)
 ```
 
 
-##Normalize rows
+##Normalize rows to unit length
 - make each a length 1 vector
+- this makes length of play not impact the SOM
 -add attributes for plotting
 ```{r}
 play.DTM.modified <- t(apply(play.DTM.modified, 1, function(x) x / sqrt(sum(x^2)) ))
@@ -178,11 +180,16 @@ code.distances <- function(SOM){
   
   #calculate scaled sum of distances
   A<-distance.coefficients*pairwise.distances
-  scaled.dist.sums <- colSums(A)/max(colSums(A))
+  scaled.dist.sums <- (colSums(A)-min(colSums(A)))/(max(colSums(A)) - min(colSums(A)))
+  
+  #clean up variables
+  remove(i,j)
   
   return(scaled.dist.sums)
 }
 ```
+The output of this function is a value between 0 and 1 for each cell on our SOM. Higher values represent greater overall distance from a cell to nearby cells.
+
 
 Putting it all together:
 
@@ -191,159 +198,124 @@ plot(play.SOM, type = "mapping", col = palette(rainbow(3,v=.9))[as.integer(attr(
 ```
 
 
-
 #Character SOM
 
-```{r, indclude = FALSE, eval = FALSE}
-library("RCurl")
-character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/character_table.csv"), sep=",", header=T, check.names = FALSE, stringsAsFactors = FALSE)
-```
+The zipped folder we downloaded in the previous example also contains a document for each character in each play containing all of that character's lines. In this next example we'll make a SOM to see if we cna find relationships between characters based on their vocabularies.
 
-#DELETE Characters with AE in NAME!!!!
-FIX THIS LATER!!
+I've already built a `character_table`, similar to the `play_table` used in the last example. You can see how this was constructed here. 
 
-```{r}
-#character_table <- character_table[-c(238,416,543,654,938,962,988,1089,1323),]
-```
+**INSERT LINK TO GH-PAGE!!!!!!!!!!!!**
 
-
-
-##Read in character lines
-
-There are some errors accessing the text files with unicode characters in their names. I'll just throw some error handling around this and drop these characters from consideration.
-
-```{r, indclude = FALSE, eval = FALSE}
-library("readr")
-for (row in row.names(character_table)){
-  tryCatch({
-    character_table[row, "text"] <- read_file(as.character(character_table[row,"path"]) , locale(encoding = "UTF-16"))
-  }, error=function(e){print(row)})
-}
-remove(row)
-```
-
-```{r}
-#character_table <- character_table[!is.na(character_table$text),]
-```
-
-
-###
-DOWNLOAD CHAR TABLE
 ```{r}
 library("RCurl")
-character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/CHAR.csv"), sep=",", header=T, check.names = FALSE, stringsAsFactors = FALSE)
+character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/CHAR.csv"), sep=",", header=T, check.names = TRUE, stringsAsFactors = FALSE)
 ```
-
-
-
 
 Let's look at the metadata we have for each text file of lines:
 
 ```{r}
-head(character_table[,c("character", "play", "genre")], 10)
+head(character_table[,c("char", "play", "genre")], 10)
 ```
 
-Note the [*dramatis_personae*](https://en.wikipedia.org/wiki/Dramatis_person%C3%A6) character. Each play has one of these documents, which is just a list of characters and contains no lines. Let's get rid of them.
+Note the [*Dramatis_personae*](https://en.wikipedia.org/wiki/Dramatis_person%C3%A6) character. Each play has one of these documents, which is just a list of characters and contains no lines. Let's get rid of them.
 
 ```{r}
-character_table <- subset(character_table, character!="dramatis_personae")
+#character_table <- subset(character_table, char!="Dramatis_personae")
 ```
 
-The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text above, so we follow the same procedure to simplify it.
-
-##Clean out bracketed tags
-
-```{r}
-character_table$text <- gsub('<[^>]*>','', character_table$text)
-```
-
-#Form & Clean Corpus
-
-Form into corpus:
+##Form Corpus
 ```{r}
 library("tm")
 character.corpus <- Corpus(VectorSource(character_table[,"text"]))
 ```
 
+##Clean Character Text
+
+The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text above, so we follow the same procedure to simplify it. This time we'll use the special `tm_reduce` option of the `tm_map` function, which allows us to combine all of our text simplifications into one step.
+
 _Note: this may take a few minutes to run._
-```{r clean character corpus}
+```{r}
 library("SnowballC")
 
-character.corpus <- tm_map(character.corpus, removePunctuation)
-character.corpus <- tm_map(character.corpus, removeNumbers)
-character.corpus <- tm_map(character.corpus, tolower)
-character.corpus <- tm_map(character.corpus, removeWords, stopwords("english"))
-character.corpus <- tm_map(character.corpus, stemDocument)
-character.corpus <- tm_map(character.corpus, stripWhitespace)
-character.corpus <- tm_map(character.corpus, PlainTextDocument)
-character.corpus <- tm_map(character.corpus, removePunctuation)
+striptags <- function(x) gsub(x, pattern = '<[^>]*>', replacement = '')
+skipwords <- function(x) removeWords(x, stopwords("english"))
+
+funcs <- list(content_transformer(striptags),
+              removePunctuation, 
+              removeNumbers, 
+              content_transformer(tolower), 
+              skipwords, 
+              stemDocument, 
+              stripWhitespace, 
+              removePunctuation)
+
+character.corpus <- tm_map(character.corpus, FUN = tm_reduce, tmFuns = funcs)
 ```
 
-
-
-##Doc Term Matrix
-
+Form Document Term Matrix:
 ```{r}
 character.DTM <- DocumentTermMatrix(character.corpus)
 ```
 
-
-##TF-IDF - SHOULD I USE THIS INSTEAD OF WEIGHTING?
-```{r}
-#test.DTM <- DocumentTermMatrix(character.corpus, control = list(weighting = weightTfIdf))
-```
-
-##Reduce Sparseness
-For the character text mining we want to use a much higher sparse factor. We have far fewer words to work with for each character (compared to entire plays). We don't want to eliminate too many words.
-
+Remove Sparse Terms
 ```{r}
 character.DTM.modified <- removeSparseTerms(character.DTM, 0.90)
-
-attr(character.DTM, "character") <- character_table$character
-attr(character.DTM, "genre") <- character_table$genre
-row.names(character.DTM.modified) <- character_table$character
 ```
+
 
 Let's see what this did to the wordcounts for some of our characters.
 ```{r}
 wordcount.DTM <- rowSums(as.matrix(character.DTM))
 wordcount.DTM.modified <- rowSums(as.matrix(character.DTM.modified))
 
-head(cbind("DTM" = wordcount.DTM,
+head(cbind(character_table$char,
+           "DTM" = wordcount.DTM,
            "DTM.modified" = wordcount.DTM.modified), 10)
 ```
+```{r}
+test <- cbind(character_table$char,
+           "DTM" = wordcount.DTM,
+           "DTM.modified" = wordcount.DTM.modified)
+```
 
-Overall this seems to have cut a fair number of words out of each character's wordcount. Also note that there are some characters don't have many lines at all. Let's exclude characters that have fewer than 30 filtered words.
+
+Overall this seems to have cut a fair number of words out of each character's wordcount. Also note that there are some characters don't have many lines at all. Let's exclude characters that have fewer than 200 filtered words.
 
 ```{r}
 character.DTM.modified <- character.DTM.modified[wordcount.DTM.modified>200, ]
 ```
 
-##Normalize
+##Normalize & TF-IDF
 
 ```{r}
-character.DTM.modified <- t(apply(character.DTM.modified, 1, function(x) x/sqrt(sum(x^2))))
+character.DTM.modified <- weightTfIdf(character.DTM.modified, normalize = TRUE)
+```
+
+##Merge with metadata
+```{r}
+character.DTM_df <- data.frame(as.matrix(character.DTM.modified))
+character.DTM_df <- merge(character_table[,c("char", "play", "genre")], character.DTM_df, by.x = "row.names", by.y = "row.names", suffixes = c("", ".DTM"))
 ```
 
 
 ##PLOT!
 First we make our SOM
 ```{r}
+
 library(kohonen)
-character.SOM <- som(scale(character.DTM.modified), grid = somgrid(10, 10, "hexagonal"), toroidal = TRUE)
+character.SOM <- som(as.matrix(character.DTM_df[,!names(character.DTM_df) %in% c("Row.names","char","play","genre")]), 
+                     grid = somgrid(10, 10, "hexagonal"), 
+                     toroidal = TRUE)
 ```
 
 Make label matrix
 ```{r}
-
-
-char.info <- character_table[character_table$character %in% attributes(character.DTM.modified)$dimnames$Docs,c("character", "play", "genre")]
-
-library(stringi)
 characters.to.plot <- c("Romeo", "Juliet", "K. Henry", "Macbeth", "Hermia",
     "Othello", "Puck")
+
 character.labels <- c()
-X <- stri_trans_totitle(attributes(character.DTM.modified)$dimnames$Docs)
+
+X <- character.DTM_df[,"char"]
 for (i in 1:length(X)) {
     if (X[i] %in% characters.to.plot) {
         character.labels[i] <- X[i]
@@ -351,18 +323,63 @@ for (i in 1:length(X)) {
         character.labels[i] <- "+"
     }
 }
-
+remove(i,X)
 ```
+
 
 #Plot characters
+
+set palette
 ```{r}
-plot(character.SOM, type = "mapping", bgcol = hsv(h=0,s=0,v=code.distances(character.SOM)), labels = character.labels)
+#palette.3 <- palette(rainbow(3, s=1, v = .9, start = 0))
+palette.3 <- c("darkred","darkorchid4", "royalblue4")
+palette.3 <- c("firebrick1","darkolivegreen3", "dodgerblue2")
+```
+
+Dim all of the labels that we don't wnat to display the full name for.
+```{r}
+
+dim.symbols <- function(x){
+  if (nchar(x)<2) {return(0.5)}
+  else {return(1)}
+}
+
+genre.label.data <- 
+  cbind(char = character.DTM_df$char,
+        label = character.labels, 
+        base_color = palette.3[as.factor(character.DTM_df$genre)],
+        transparency = lapply(character.labels,dim.symbols))
+
+genre.label.data <- as.data.frame(genre.label.data)
+
+label.colors <- c()
+for (row in 1:nrow(genre.label.data)){
+  label.colors[row] <- adjustcolor(genre.label.data[row,"base_color"], alpha.f = genre.label.data[row,"transparency"])
+}
+
+genre.label.data <- cbind(genre.label.data, label_color = label.colors)
+remove(row, label.colors)
+```
+
+##color by genre
+```{r}
+par(bg = hsv(h=0,s=0,v=.7))
+plot(character.SOM, 
+     type = "mapping",
+     col = as.character(genre.label.data$label_color),
+     bgcol = hsv(h=0.8,s=.3,v=(.5*(0.3+code.distances(character.SOM)))),
+     labels = genre.label.data$label)
 ```
 
 
 
 
-#Clean up Workspace
 ```{r}
-unlink(td, recursive = FALSE)
+
+plot(character.SOM, 
+     type = "mapping",
+     col = as.character(genre.label.data$label_color),
+     bgcol = hsv(h=0,s=0,v=code.distances(character.SOM)),
+     labels = genre.label.data$label)
 ```
+
