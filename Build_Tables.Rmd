@@ -52,6 +52,10 @@ for (genre in genres){
 remove(genre, plays, play, play.name, play.text)
 ```
 
+```{r}
+write.csv(play_table, file = "play_table.csv", row.names = FALSE)
+```
+
 
 #Make character_table
 
