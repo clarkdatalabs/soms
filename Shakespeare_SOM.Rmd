@@ -48,12 +48,12 @@ play_table <- data.frame(play=character(),
 for (genre in genres){
   plays <- list.files(file.path(fpath,genre), pattern = ".txt")
   for (play in plays){
-    text <- read_file(file.path(fpath,genre,play), locale(encoding = "UTF-16"))
+    play.text <- read_file(file.path(fpath,genre,play), locale(encoding = "UTF-16"))
     play.name <- gsub('.txt','', play)
-    play_table <- rbind(play_table, data.frame(play = play.name, genre = genre, text = text))
+    play_table <- rbind(play_table, data.frame(play = play.name, genre = genre, text = play.text))
   }
 }
-remove(genre, plays, play, play.name, text)
+remove(genre, plays, play, play.name, play.text)
 ```
 
 ##Clean up Workspace
@@ -208,7 +208,7 @@ I've already built a `character_table`, similar to the `play_table` used in the 
 
 ```{r}
 library("RCurl")
-character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/CHAR.csv"), sep=",", header=T, check.names = TRUE, stringsAsFactors = FALSE)
+character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/character_table.csv"), sep=",", header=T, check.names = TRUE, stringsAsFactors = FALSE)
 ```
 
 Let's look at the metadata we have for each text file of lines:
