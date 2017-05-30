@@ -12,7 +12,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
 ```
 
-[Self Organizing Maps and the Kohonen Package in R - NBA Player Statistics](https://clarkdatalabs.github.io/soms/SOM_NBA)
+[Introduction to Self Organizing Maps in R - the Kohonen Package and NBA Player Statistics](https://clarkdatalabs.github.io/soms/SOM_NBA)
 
 [Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 1)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1)
 

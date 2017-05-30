@@ -1,5 +1,5 @@
 ---
-title: "Self Organizing Maps and the Kohonen Package in R - NBA Player Statistics"
+title: "Introduction to Self Organizing Maps in R - the Kohonen Package and NBA Player Statistics"
 author: "Dan Tanner"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
