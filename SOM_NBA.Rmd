@@ -1,0 +1,194 @@
+---
+title: "Self Organizing Maps and the Kohonen Package in R: Part 1 - exploring NBA player statistics"
+author: "Dan Tanner"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+   toc: True
+   toc_depth: 2
+   toc_float: True
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
+```
+#Inroduction
+
+[Self Organizing Maps](https://en.wikipedia.org/wiki/Self-organizing_map "Wikipedia: Self-organizing map") (SOMs) are a tool for visualizing patterns in high dimensional data by producing a 2 dimensional representation, which (hopefully) displays meaningful patterns in the higher dimensional structure. SOMs are "trained" with the given data (or a sample of your data) in the following way:
+
+* The size of map grid is defined.
+* Each cell in the grid is assigned an initializing vector in the data space.
+    + For example, if you are creating a map of a 22 dimensional space, each grid cell is assigned a representative 22 dimensional vector.
+    + Initiation can either be random or following [specific methods](https://en.wikipedia.org/wiki/Self-organizing_map#SOM_initiation "Wikipedia: SOM initiation").
+* Data are repeatedly fed into the model to train it. Each time a training vector is entered, the following process is undertaken:
+    + The grid cell with the representative vector that is closest to the training vector is identified.
+    + All of the representative vectors of grid cells nearby the identified one are slightly adjusted towards the training vector.
+* Several parameters of convergence force the adjustments to get smaller and smaller as training vectors are fed in many times, causing the map to stabilize into a representation.
+
+The key feature this algorithm gives to the SOM is that points that were close in the data space are close in the SOM. Thus SOMs may be a good tool for representing spatial clusters in your data.
+
+#Kohonen Mapping Types
+
+```{r message=FALSE, warning=FALSE, code_folding: hide}
+require(kohonen)
+require(RColorBrewer)
+```
+
+The Kohonen package allows for quick creation of some basic SOMs in R. Our examples below will use player statistics from the 2015/16 NBA season. We will look at player stats per 36 minutes played, so variation in playtime is somewhat controlled for. These data are available at http://www.basketball-reference.com/. We've already cleaned the data. `Kohonen` functions will require using numeric fields with no missing entries. 
+```{r}
+library(RCurl)
+NBA <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/NBA_2016_player_stats_cleaned.csv"), sep=",", header=T, check.names = FALSE)
+```
+
+##Basic SOM
+Before we create a SOM, we need to choose which variables we want to search for patterns in.
+```{r list variabels}
+colnames(NBA)
+```
+We'll start with some simple examples using shot attempts:
+
+```{r}
+NBA.measures1 <- c("FTA","2PA","3PA")
+NBA.SOM1 <- som(scale(NBA[NBA.measures1]), grid = somgrid(6,4, "rectangular"))
+plot(NBA.SOM1)
+```
+
+Note that we scaled and centered our training data, and defined the grid size and arrangement. The standard Kohonen SOM plot creates these pie representatons of the representative vectors for the grid cells, where the radius of a wedge corresponds to the magnitude in a particular dimension. Some patterns start to emerge, with players generally being clustered by how many of each type of shot they take.
+
+##Heatmap SOM
+Remember that the above is just a *map* of the player data - each cell displays its representative vector. We could identify players with cells on the map by assigning each player to the cell with representative vector closest to that player's stat line. The "count" type SOM does exactly this, and creates a heatmap based on the number of players assigned to each cell. Just for fun, we reversed the order of the pre-defined palette `heat.colors` so that red represents grid cells with higher numbers of represented players.
+
+```{r reverse colors}
+#reverse color ramp
+colors <- function(n, alpha = 1){
+  rev(heat.colors(n, alpha))
+}
+```
+```{r Heatmap SOM}
+plot(NBA.SOM1, type = "counts", palette.name = colors, heatkey = TRUE)
+```
+
+##Plotting Points
+Alternatively you could plot the players as points on the grid using the "mapping" type SOM. We do it side by side with the regular SOM to start to make visual comparisons.
+```{r}
+par(mfrow=c(1,2))
+plot(NBA.SOM1, type = "mapping", pchs = 20, main = "Mapping Type SOM")
+plot(NBA.SOM1, main = "Default SOM Plot")
+```
+The representattive vector of each map cell is displayed on the right. On the left, players are plotted on this map based on how close their stat lines are to these representative vectors. Note that each of these examples takes a different `type` parameter for the Kohonen plot function. If you want to customize these graphics by, for example, plotting points on a grid which displays some other measure of your SOM as a background, you will have to dig into the some of the properties of the SOM objects. We'll do this in a forthcoming post about text mining and SOMs.
+
+##Toroidal SOMs
+This next example is not another `type` of SOM plot, but a way of changing the geometry of any of the plot types. When we trained the SOM for the above examples we used a rectangular grid. Since cells on the edges, and particularly in the corners, have fewer neighbors than interior cells, more extreme values tend to be pushed to the edges. In our first example, the maximum in each of the three stats we looked at fell in a seperate corner. Alternatively, we can use toroidal topology for our map - basically pac-man rules - where the top-bottom and right-left edges are adjacent.
+```{r}
+NBA.SOM2 <- som(scale(NBA[NBA.measures1]), grid = somgrid(6,6, "hexagonal"), toroidal = TRUE)
+```
+```{r}
+par(mfrow=c(1,2))
+plot(NBA.SOM2, type = "mapping", pchs = 20, main = "Mapping Type SOM")
+plot(NBA.SOM2, main = "Default SOM Plot")
+```
+
+##Mapping Distance
+When we plot with `type = "dist.neighbours"`, the cells are colored depending on the overall distance to their nearest neighbors, which allows us to visualize how far apart different features are in the higher dimensional space.
+```{r}
+plot(NBA.SOM2, type="dist.neighbours", palette.name = terrain.colors)
+```
+
+You can think of this display with a topographic analogy. Cells with greater distances to their neighbors are like mountain peaks - the deformed surface area means surface distances are greater. We will explore this idea more in a follow up post to this one, where we will attempt to visualize the distance between Shakespearean plays based on their word usage.
+
+#Supervised SOMs
+The `kohonen` package also supports supervised SOMs, which allow us to make classifications. So far we've only worked with mapping three dimensional data to two dimensions. The utility of SOMs becomes more evident when we're working with higher dimensional data, so let's do this supervised example with an expanded list of player stats:
+
+```{r}
+NBA.measures2 <- c("FTA","FT","2PA","2P","3PA","3P","AST","ORB","DRB","TRB","STL","BLK","TOV")
+```
+
+##The xyf() Function
+We'll use the `xyf()` function to create a supervised SOM and classification of players by their position on the court. We'll randomly divide our data into training and testing sets.
+
+```{r}
+training_indices <- sample(nrow(NBA),200)
+NBA.training <- scale(NBA[training_indices,NBA.measures2])
+NBA.testing <- scale(NBA[-training_indices,NBA.measures2], center = attr(NBA.training, "scaled:center"), scale = attr(NBA.training, "scaled:scale"))
+```
+Note that when we rescale our testing data we need to scale it according to how we scaled our training data.
+  
+```{r}
+NBA.SOM3 <- xyf(NBA.training, classvec2classmat(NBA$Pos[training_indices]), grid = somgrid(13,13, "hexagonal"), toroidal = TRUE ,rlen=100, xweight = .5)
+```
+Note the `xweight` parameter for `xyf()`. This allows you to weight the set of training variables (`NBA.training`) versus the prediction variable (`NBA$Pos`) in the training algorithm. Now let's check the accuracy of the prediction:
+
+```{r}
+pos.prediction <- predict(NBA.SOM3, newdata = NBA.testing)
+table(NBA[-training_indices,"Pos"], pos.prediction$prediction)
+```
+
+
+##Visualizing Predictions: "Codes" SOMs
+For this example we'll use `xyf()` to do a similar position predicting training, but using all of the players instead of just a training set. This time we will weight the player stats more heavily than the player position using the `xweight` parameter.
+
+```{r}
+NBA.SOM4 <- xyf(scale(NBA[,NBA.measures2]), classvec2classmat(NBA[,"Pos"]), grid = somgrid(13, 13, "hexagonal"), toroidal = TRUE, rlen = 300, xweight = 0.7)
+```
+
+Plotting using `type = "codes"` we get the standard side by side visualization the player stats (`Codes X`) and the player position prediction (`Codes Y`).
+
+```{r}
+par(mfrow = c(1,2))
+plot(NBA.SOM4, type = "codes", main = c("Codes X", "Codes Y"))
+NBA.SOM4.hc <- cutree(hclust(dist(NBA.SOM4$codes$Y)), 5)
+add.cluster.boundaries(NBA.SOM4, NBA.SOM4.hc)
+```
+
+This view allows us to compare player stats to the position predictions, but doesn't really give us any idea about the accuracy of these groupings or how well the players map into these groupings. 
+
+##Visualizing Predictions: Customizing "Mapping" SOMs
+In this final example we'll make a few customizations with the `type = mapping` plot so that we can simultaneously represent the actual player positions and the SOM's predicted positions. We'll start with the visualization and follow it with the code for you to explore.
+
+```{r, echo=FALSE}
+bg.pallet <- c("red", "blue", "yellow", "purple", "green")
+
+#make a vector of just the background colors for all map cells
+position.predictions <- classmat2classvec(predict(NBA.SOM4)$unit.predictions)
+base.color.vector <-bg.pallet[match(position.predictions, levels(NBA$Pos))]
+
+#set alpha to scale with maximum confidence of prediction
+bgcols <- c()
+max.conf <- apply(NBA.SOM4$codes$Y, 1, max)
+for (i in 1:length(base.color.vector)){
+  bgcols[i] <- adjustcolor(base.color.vector[i],max.conf[i])
+}
+```
+
+```{r, echo=FALSE}
+par(mar=c(0,0,0,4), xpd = TRUE)
+plot(NBA.SOM4, type = "mapping", pchs = 21, col = "black", bg = bg.pallet[match(NBA$Pos, levels(NBA$Pos))],
+    bgcol = bgcols)
+
+legend("topright", legend = levels(NBA$Pos), text.col = bg.pallet, bty = 'n', inset = c(-.03,0))
+```
+Background colors are set by the predicted player position for that location. We set the background color transparency (alpha) to depend on the certainty with which our SOM classified that cell. Faded cells have multiple position values which have similar orders of magnitude, though only the position of the maximum value is used for the color. Backgrounds of plotted player dots represent their true position.
+
+```{r, eval=FALSE}
+bg.pallet <- c("red", "blue", "yellow", "purple", "green")
+
+#make a vector of just the background colors for all map cells
+position.predictions <- classmat2classvec(predict(NBA.SOM4)$unit.predictions)
+base.color.vector <-bg.pallet[match(position.predictions, levels(NBA$Pos))]
+
+#set alpha to scale with maximum confidence of prediction
+bgcols <- c()
+max.conf <- apply(NBA.SOM4$codes$Y, 1, max)
+for (i in 1:length(base.color.vector)){
+  bgcols[i] <- adjustcolor(base.color.vector[i],max.conf[i])
+}
+```
+
+```{r, eval=FALSE}
+par(mar=c(0,0,0,4), xpd = TRUE)
+plot(NBA.SOM4, type = "mapping", pchs = 21, col = "black", bg = bg.pallet[match(NBA$Pos, levels(NBA$Pos))],
+    bgcol = bgcols)
+
+legend("topright", legend = levels(NBA$Pos), text.col = bg.pallet, bty = 'n', inset = c(-.03,0))
+```

@@ -7,8 +7,6 @@ output:
    toc: True
    toc_depth: 2
    toc_float: True
-  pdf_document: default
-   toc: True
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
