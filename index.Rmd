@@ -1,0 +1,19 @@
+---
+title: "Self Organizing Maps and the Kohonen Package in R"
+author: Daniel Tanner
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+   toc: True
+   toc_depth: 2
+   toc_float: True
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
+```
+
+[Self Organizing Maps and the Kohonen Package in R - NBA Player Statistics](https://clarkdatalabs.github.io/soms/SOM_NBA)
+
+[Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 1)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1)
+
+[Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 2)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_2)

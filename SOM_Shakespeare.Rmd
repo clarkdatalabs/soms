@@ -208,7 +208,7 @@ I've already built a `character_table`, similar to the `play_table` used in the 
 
 ```{r}
 library("RCurl")
-character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_txt/character_table.csv"), sep=",", header=T, check.names = TRUE, stringsAsFactors = FALSE)
+character_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_tables/character_table.csv"), sep=",", header=T, check.names = TRUE, stringsAsFactors = FALSE)
 ```
 
 Let's look at the metadata we have for each text file of lines:

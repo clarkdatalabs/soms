@@ -1,0 +1,226 @@
+---
+title: "Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 1)"
+author: Daniel Tanner
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+   toc: True
+   toc_depth: 2
+   toc_float: True
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
+```
+
+A couple months ago I published a couple examples of making Self Organizing Maps using the R package `kohonen` and player stats from the 2015/2016 NBA season ([available here](https://clarkdatalabs.github.io/soms/SOM_NBA)). That post covered the basics of Self Organizing Maps and the the basic plot types supported by `kohonen`.
+
+Since that post I've been playing with around with text mining and a corpus of the dramas of Shakespeare. My central questions is: 
+
+*Can we use SOMs to see relationships between plays (part 1) or characters ([part 2](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_2)) based only on an analysis of their spoken vocabulary? *
+
+
+#Downloading Shakespeare's Texts
+The script in this section downloads a zipped folder containing all of the text of 37 of Shakespeare's plays (originally [available at lexically.net](http://lexically.net/wordsmith/support/shakespeare.html)). It sets up a table (`play_table`) which contains all of the information we will be working with, including the complete text of each play.
+
+```{r, eval=FALSE}
+td <- tempdir() 
+tf <- tempfile(tmpdir=td)
+
+download.file("https://github.com/clarkdatalabs/soms/raw/master/ShakespearePlaysPlus.zip", tf)
+
+fname <- unzip(tf, list=TRUE)$Name[1] 
+unzip(tf, exdir=td, overwrite=TRUE) 
+fpath <- file.path(td, fname)
+remove(fname)
+unlink(tf)
+```
+
+Within `ShakespearePlaysPlus`, there are folders categorizing works by genre. We'll use this as metadata for plots later, so we want to capture it in our table.
+```{r, eval=FALSE}
+genres <- list.dirs(fpath, full.names = FALSE, recursive = FALSE)
+```
+
+We build a dataframe with a row for each play and columns for play title, genre, and text:
+```{r, eval=FALSE}
+library("readr")
+play_table <- data.frame(play=character(),
+                         genre=character(),
+                         text=character())
+
+for (genre in genres){
+  plays <- list.files(file.path(fpath,genre), pattern = ".txt")
+  for (play in plays){
+    play.text <- read_file(file.path(fpath,genre,play), locale(encoding = "UTF-16"))
+    play.name <- gsub('.txt','', play)
+    play_table <- rbind(play_table, data.frame(play = play.name, genre = genre, text = play.text))
+  }
+}
+remove(genre, plays, play, play.name, play.text)
+```
+
+Finally, we clean up everything from the temporary download except the table we've created:
+```{r, eval=FALSE}
+unlink(td, recursive = FALSE)
+```
+
+```{r, echo=FALSE, cache=TRUE}
+#This chunk downloads play_table to knit this document instead of generating it again locally
+library("RCurl")
+play_table <- read.csv(text=getURL("https://raw.githubusercontent.com/clarkdatalabs/soms/master/Shakespeare_tables/play_table.csv"), sep=",", header=T, check.names = TRUE, stringsAsFactors = FALSE)
+```
+
+#Forming & Cleaning a Corpus
+
+We will be using the `tm` library for text mining. The fundemental object we'll be working with is a *corpus*, within which we have one *document* per play.
+```{r form corpus}
+library("tm")
+
+play.vec <- VectorSource(play_table[,"text"])
+play.corpus <- Corpus(play.vec)
+```
+
+We can see the start of the contents of the first document in our corpus:
+```{r inspect document text}
+substr(play.corpus[[1]]$content, 1, 400)
+```
+
+Without using `substr` we would see the entire text of *A Midsummer-Night's Dream* - over 110,000 characters instead of just the first 400. Yikes!
+
+You can see there are lots of stage instructions and other meta-data tags that are all enclosed in angle brackets. To transform the contents of documents within our corpus, we need to define a function that does exactly what we want: strip out anything within angle brackets.
+
+```{r}
+striptags <- function(x) gsub(x, pattern = '<[^>]*>', replacement = '')
+```
+
+The `tm_map` function applies functions to our corpus. Many of the functions we'll use are already defined on corpus objects. Our `striptags` function, however, is not - it will need to be put within the `content_transformer` wrapper function so it applies to the contents of each document within our corpus.
+```{r strip tags from corpus}
+play.corpus <- tm_map(play.corpus, content_transformer(striptags))
+```
+```{r}
+substr(play.corpus[[1]]$content, 1, 400)
+```
+
+Next we want to really clean up our texts. The `tm` package has functions for stripping punctuation, numbers, whitespace, and the most common words (we don't want to be comparing counts of "and" and "to"). We can change everything to lower case using `tolower()` from base R, but again we'll need to wrap this in `content_transformer` so `tm_map` knows to apply this to the contents of each document. We'll also use a function from the `SnowballC` package to cut words down to common stems for comparison.
+
+_Note: this may take a few minutes to run._
+```{r clean corpus, cache=TRUE}
+library("SnowballC")
+
+play.corpus <- tm_map(play.corpus, removePunctuation)
+play.corpus <- tm_map(play.corpus, removeNumbers)
+play.corpus <- tm_map(play.corpus, content_transformer(tolower))
+play.corpus <- tm_map(play.corpus, removeWords, stopwords("english"))
+play.corpus <- tm_map(play.corpus, stemDocument)
+play.corpus <- tm_map(play.corpus, stripWhitespace)
+play.corpus <- tm_map(play.corpus, removePunctuation)
+```
+```{r inspect cleaned text}
+substr(play.corpus[[1]]$content, 1, 400)
+```
+
+The functions that rely on english dictionaries had a bit of trouble with the Shakespearean English, but they're close enough for our analysis.
+
+##Document Term Matrix
+Next we'll create what's called a Document Term Matrix.
+
+```{r make document term matrix}
+play.DTM <- DocumentTermMatrix(play.corpus)
+```
+
+##Restrict to common words
+so matrix not super sparse
+
+```{r}
+play.DTM.modified <- removeSparseTerms(play.DTM, 0.8)
+```
+
+##Normalize rows to unit length
+- make each a length 1 vector
+- this makes length of play not impact the SOM
+```{r}
+play.DTM.modified <- t(apply(play.DTM.modified, 1, function(x) x / sqrt(sum(x^2)) ))
+```
+
+#SOM!
+To create our Self Organizing Map, we are first going to create a dataframe with ..
+
+```{r}
+library(kohonen)
+
+play.SOM <- som(play.DTM.modified, grid = somgrid(6,6, "hexagonal"),  toroidal = FALSE)
+plot(play.SOM)
+```
+
+```{r set palette.3}
+palette.3 <- c("firebrick1","darkolivegreen3", "dodgerblue2")
+```
+
+```{r}
+plot(play.SOM,
+     type = "mapping",
+     col = palette.3[as.factor(play_table$genre)],
+     bgcol = "lightgray",
+     labels = play_table$play)
+```
+
+
+This is not a particularly clean or useful visualization. There are two main problems that we will address below.
+* There are too many labeled points, which become illegible.
+* The gray backgrounds of the cells don't communicate anything. It would be nice if they could be used to convey distance of a cell to it's neighbors, like in the `dist.neighbours` type SOMs.
+
+First, we'll just make a list of the plays we want labeled, and represent the rest with *x*.
+
+```{r}
+plays.to.plot <- c("Romeo And Juliet", "Julius Caesar", "King Lear", "Macbeth", "Othello, the Moor of Venice", "The Tragedy of King Richard II", "The Tragedy of King Richard III", "The Tempest", "The Taming of the Shrew")
+play.labels <- c()
+X <- as.vector(play_table$play)
+for (i in 1:37){
+  if (X[i] %in% plays.to.plot){play.labels[i] <- X[i]}
+  else{play.labels[i]<-"x"}
+}
+```
+
+Next, we want to essentially combine two types of kohonen SOM functions, `mapping` and `dist.neighbours`. TO do this we will write our own function to calculate the distance of a cell's representative vector to all others, strongly weighing the neighboring cells. We'll then use this do set the background color using the `mapping` type SOM.
+
+```{r}
+code.distances <- function(SOM){
+  N <- nrow(SOM$codes)
+  #calculate all pairwise distances
+  pairwise.distances = c()
+  for (i in 1:N){
+    list <- matrix()
+    for (j in 1:N){
+      list[j] <- dist(rbind(SOM$codes[i,],SOM$codes[j,]))
+    }
+    pairwise.distances <- cbind(pairwise.distances, list)
+  }
+  
+  ##distance coefficient function, to be applied to geometric GRID distances
+  d.coef<-function(x){
+    if (x == 0){return(0)}
+    else{return(1/(x^4))}
+    }
+  distance.coefficients <- apply(kohonen::unit.distances(SOM$grid, SOM$toroidal),c(1,2),d.coef)
+  
+  #calculate scaled sum of distances
+  A<-distance.coefficients*pairwise.distances
+  scaled.dist.sums <- (colSums(A)-min(colSums(A)))/(max(colSums(A)) - min(colSums(A)))
+  
+  #clean up variables
+  remove(i,j)
+  
+  return(scaled.dist.sums)
+}
+```
+The output of this function is a value between 0 and 1 for each cell on our SOM. Higher values represent greater overall distance from a cell to nearby cells.
+
+Putting it all together:
+
+```{r}
+plot(play.SOM, 
+     type = "mapping", 
+     col = palette.3[as.factor(play_table$genre)],
+     bgcol = hsv(h=0,s=0,v=code.distances(play.SOM)), 
+     labels = play.labels)
+```
+We've used the distance function to set the *value* for the background gray tone. larger distance to neighbors corresponds with a value close to 1, and a lighter color. Alternatively, cells with dark backgrounds are closer to their neighbors.
