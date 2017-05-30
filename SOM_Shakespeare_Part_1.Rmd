@@ -197,7 +197,7 @@ for (i in 1:nrow(play_table)){
 }
 ```
 
-##Cell Distance
+##Visualizing Cell Distance
 
 Next, we want to essentially combine two types of kohonen SOM functions, `mapping` and `dist.neighbours`. To do this we will write our own function to calculate the distance of a cell's representative vector to all others, strongly weighing the neighboring cells. We'll then use this do set the background color using the `mapping` type SOM. Don't worry about the details.
 ```{r}
@@ -242,3 +242,6 @@ plot(play.SOM,
      labels = play.labels)
 ```
 We've used the distance function to set the *value* for the background gray tone. larger distance to neighbors corresponds with a value close to 1, and a lighter color. Alternatively, cells with dark backgrounds are closer to their neighbors.
+
+[Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 2)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_2)
+

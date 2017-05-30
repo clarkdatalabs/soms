@@ -46,7 +46,7 @@ character.corpus <- Corpus(VectorSource(character_table[,"text"]))
 The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text above, so we follow the same procedure to simplify it. This time we'll use the special `tm_reduce` option of the `tm_map` function, which allows us to combine all of our text simplifications into one step.
 
 _Note: this may take a few minutes to run._
-```{r, tidy=FALSE}
+```{r clean character text, tidy=FALSE, cache=TRUE}
 library("SnowballC")
 
 striptags <- function(x) gsub(x, pattern = '<[^>]*>', replacement = '')
@@ -128,7 +128,8 @@ characters.to.plot <- c("Romeo",
                         "Macbeth",
                         "Hermia",
                         "Othello",
-                        "Puck")
+                        "Puck",
+                        "Borachio")
 
 character.labels <- c()
 
@@ -153,7 +154,7 @@ set palette
 palette.3 <- c("firebrick1","darkolivegreen3", "dodgerblue2")
 ```
 
-Dim all of the labels that we don't wnat to display the full name for.
+Dim all of the labels that we don't want to display the full name for.
 ```{r}
 
 dim.symbols <- function(x){
@@ -214,21 +215,15 @@ The output of this function is a value between 0 and 1 for each cell on our SOM.
 
 ##color by genre
 ```{r, tidy=FALSE}
-par(bg = hsv(h=0,s=0,v=.7))
+par(bg = hsv(h=0,s=0,v=.7), font = 1, cex = 1.2)
 plot(character.SOM, 
      type = "mapping",
      col = as.character(genre.label.data$label_color),
      bgcol = hsv(h=0.8,s=.3,v=(.5*(0.3+code.distances(character.SOM)))),
-     labels = genre.label.data$label)
+     labels = genre.label.data$label,
+     main = "Shakespearean Characters")
 ```
 
+There are some apparent clusters. Recall that we are using a toroidal SOM for this example, so the left and right edges and the top and bottom edges are identified. As in [part 1](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1), background color signifies a cell's distance from neighboring cells. Dark cells are much closer to their neighbors than lighter colored cells. 
 
-
-```{r, tidy=FALSE}
-plot(character.SOM, 
-     type = "mapping",
-     col = as.character(genre.label.data$label_color),
-     bgcol = hsv(h=0,s=0,v=code.distances(character.SOM)),
-     labels = genre.label.data$label)
-```
-
+Even to a Shakespearean neophyte such as myself, using this SOM to do some exploration reveals a couple interesting features. Romeo and Juliet are very close to each other linguistically, as we might have expected. King Henry, on the other hand, is pretty dissimilar from himself across the multiple plays in which he is a character. 
