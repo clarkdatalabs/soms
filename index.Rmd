@@ -4,7 +4,7 @@ author: Daniel Tanner
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
-   toc: True
+   toc: False
    toc_depth: 2
    toc_float: True
 ---
