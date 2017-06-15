@@ -192,3 +192,9 @@ plot(NBA.SOM4, type = "mapping", pchs = 21, col = "black", bg = bg.pallet[match(
 
 legend("topright", legend = levels(NBA$Pos), text.col = bg.pallet, bty = 'n', inset = c(-.03,0))
 ```
+
+#SOMs and Text Mining
+
+[Self Organizing Maps and Text Mining - Visualizing Shakespeare (Part 1)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1)  
+
+[Self Organizing Maps and Text Mining - Visualizing Shakespeare (Part 2)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_2)

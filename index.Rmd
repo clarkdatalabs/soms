@@ -14,6 +14,6 @@ knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FA
 
 [Introduction to Self Organizing Maps in R - the Kohonen Package and NBA Player Statistics](https://clarkdatalabs.github.io/soms/SOM_NBA)
 
-[Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 1)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1)
+[Self Organizing Maps and Text Mining - Visualizing Shakespeare (Part 1)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1)
 
-[Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 2)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_2)
+[Self Organizing Maps and Text Mining - Visualizing Shakespeare (Part 2)](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_2)

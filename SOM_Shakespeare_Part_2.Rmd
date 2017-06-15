@@ -1,5 +1,5 @@
 ---
-title: "Self Organizing Maps and Text Mining - Shakespeare SOMs (Part 2)"
+title: "Self Organizing Maps and Text Mining - Visualizing Shakespeare (Part 2)"
 author: Daniel Tanner
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
