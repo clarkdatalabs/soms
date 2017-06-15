@@ -12,9 +12,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
 ```
 
-#Character SOM
+#Setup
 
-The zipped folder we downloaded in the previous example also contains a document for each character in each play containing all of that character's lines. In this next example we'll make a SOM to see if we can find relationships between characters based on their vocabularies.
+The zipped folder we downloaded in the [part 1](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1) also contains a document for each character in each play containing all of that character's lines. In this example we'll make a SOM to see if we can find relationships between characters based on their vocabularies.
 
 I've already built a `character_table`, similar to the `play_table` used in the last example. [You can see how this was constructed here](https://clarkdatalabs.github.io/soms/Build_Tables). 
 
@@ -29,21 +29,16 @@ Let's look at the metadata we have for each text file of lines:
 head(character_table[,c("char", "play", "genre")], 10)
 ```
 
-Note the [*Dramatis_personae*](https://en.wikipedia.org/wiki/Dramatis_person%C3%A6) character. Each play has one of these documents, which is just a list of characters and contains no lines. Let's get rid of them.
+Note the [*Dramatis_personae*](https://en.wikipedia.org/wiki/Dramatis_person%C3%A6) character. Each play has one of these documents, which is just a list of characters and contains no lines. We could get rid of these now, but we are going to end up leveraging the row numbering in `character_table` to add labels to our SOM, so we don't want to remove any rows from `character_table`. Instead, these will get filtered out later when we ignore documents with too few words in them.
 
-```{r}
-#character_table <- subset(character_table, char!="Dramatis_personae")
-```
-
-##Form Corpus
+##Form & Clean Corpus
 ```{r}
 library("tm")
 character.corpus <- Corpus(VectorSource(character_table[,"text"]))
 ```
 
-##Clean Character Text
 
-The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text above, so we follow the same procedure to simplify it. This time we'll use the special `tm_reduce` option of the `tm_map` function, which allows us to combine all of our text simplifications into one step.
+The text here has the same bracketed tags, white space, punctuation, and uncommon words that we stripped out of the play text in [part 1](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1), so we follow the same procedure to simplify it. This time we'll use the special `tm_reduce` option of the `tm_map` function, which allows us to combine all of our text simplifications into one step.
 
 _Note: this may take a few minutes to run._
 ```{r clean character text, tidy=FALSE, cache=TRUE}
@@ -64,12 +59,10 @@ funcs <- list(content_transformer(striptags),
 character.corpus <- tm_map(character.corpus, FUN = tm_reduce, tmFuns = funcs)
 ```
 
-Form Document Term Matrix:
+Again, we form a Document Term Matrix and remove sparse terms:
 ```{r}
 character.DTM <- DocumentTermMatrix(character.corpus)
 ```
-
-Remove Sparse Terms
 ```{r}
 character.DTM.modified <- removeSparseTerms(character.DTM, 0.90)
 ```
@@ -82,36 +75,39 @@ wordcount.DTM.modified <- rowSums(as.matrix(character.DTM.modified))
 
 head(cbind(character_table$char,
            "DTM" = wordcount.DTM,
-           "DTM.modified" = wordcount.DTM.modified), 10)
-```
-```{r, tidy=FALSE}
-test <- cbind(character_table$char,
-           "DTM" = wordcount.DTM,
-           "DTM.modified" = wordcount.DTM.modified)
+           "DTM.modified" = wordcount.DTM.modified),
+     n = 10)
 ```
 
-
-Overall this seems to have cut a fair number of words out of each character's wordcount. Also note that there are some characters don't have many lines at all. Let's exclude characters that have fewer than 200 filtered words.
+Overall this seems to have cut a fair number of words out of each character's wordcount. Also note that some characters don't have many lines at all. Let's exclude characters that have fewer than 200 filtered words.
 
 ```{r}
-character.DTM.modified <- character.DTM.modified[wordcount.DTM.modified>200, ]
+character.DTM.modified <- character.DTM.modified[wordcount.DTM.modified>200,]
 ```
 
-##Normalize & TF-IDF
-
+##TF-IDF
+This time we are going to use [Term Frequency-Inverse Document Frequency](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) (TF-IDF) as a weighting on our terms. This scales a term to reflect it's relative importance, which is determined by how many of the documents in our corpus the term appears in. Words that are only common to a few characters will have more influence over how our SOM groups characters. The `tm` package supports this with the `weightTfIdf` function, which we also use to normalize our rows.
 ```{r}
 character.DTM.modified <- weightTfIdf(character.DTM.modified, normalize = TRUE)
 ```
 
-##Merge with metadata
+##Merge with Metadata
+In order to use some of the metadata in `character_table` in our SOM plots, we need to merge it onto our Document Term Matrix, which we'll need to convert to a dataframe.
 ```{r}
 character.DTM_df <- data.frame(as.matrix(character.DTM.modified))
-character.DTM_df <- merge(character_table[,c("char", "play", "genre")], character.DTM_df, by.x = "row.names", by.y = "row.names", suffixes = c("", ".DTM"))
+character.DTM_df[1:10,1:4]
+```
+We can see that even though we removed rows representing characters with few lines, the row numbers from our original `character_table` were maintained. We use these to merge:
+```{r, tidy=FALSE}
+character.DTM_df <- merge(character_table[,c("char", "play", "genre")],
+                          character.DTM_df, 
+                          by.x = "row.names", 
+                          by.y = "row.names", 
+                          suffixes = c("", ".DTM"))
 ```
 
-
-##PLOT!
-First we make our SOM
+#SOM - Colored by Genre
+We form our SOM object as before. Note that the `kohonen` package restricts the size of your map grid to a number of cells less than the size of your training data. In part 1, we were working with only 37 plays, and could have at most a 6x6 grid (or 1x37 if we were feeling particularly useless). Here we are free to have a much larger grid. 
 ```{r}
 
 library(kohonen)
@@ -120,7 +116,8 @@ character.SOM <- som(as.matrix(character.DTM_df[,!names(character.DTM_df) %in% c
                      toroidal = TRUE)
 ```
 
-Make label matrix
+##Label Text
+As in part 1, we will choose a select set of characters to plot:
 ```{r, tidy=FALSE}
 characters.to.plot <- c("Romeo", 
                         "Juliet",
@@ -132,7 +129,6 @@ characters.to.plot <- c("Romeo",
                         "Borachio")
 
 character.labels <- c()
-
 X <- character.DTM_df[,"char"]
 for (i in 1:length(X)) {
     if (X[i] %in% characters.to.plot) {
@@ -144,17 +140,12 @@ for (i in 1:length(X)) {
 remove(i,X)
 ```
 
-
-#Plot characters
-
-set palette
+##Label Color & Opacity
+In this figure we will color the characters by genre. Since we are plotting over 400 characters on the same map, let's make all of the characters labeled with "+" somewhat transparent so we can read the names of the characters we are actually interested in.
 ```{r}
-#palette.3 <- palette(rainbow(3, s=1, v = .9, start = 0))
-#palette.3 <- c("darkred","darkorchid4", "royalblue4")
 palette.3 <- c("firebrick1","darkolivegreen3", "dodgerblue2")
 ```
 
-Dim all of the labels that we don't want to display the full name for.
 ```{r}
 
 dim.symbols <- function(x){
@@ -179,7 +170,8 @@ genre.label.data <- cbind(genre.label.data, label_color = label.colors)
 remove(row, label.colors)
 ```
 
-Code Distances function from part 1:
+##Cell Background - Distance
+Here we define the same distance function [from part 1](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1#visualizing_cell_distance) used to color the background of the map cells.
 ```{r}
 code.distances <- function(SOM){
   N <- nrow(SOM$codes)
@@ -212,8 +204,7 @@ code.distances <- function(SOM){
 ```
 The output of this function is a value between 0 and 1 for each cell on our SOM. Higher values represent greater overall distance from a cell to nearby cells.
 
-
-##color by genre
+##Plot
 ```{r, tidy=FALSE}
 par(bg = hsv(h=0,s=0,v=.7), font = 1, cex = 1.2)
 plot(character.SOM, 
@@ -221,9 +212,54 @@ plot(character.SOM,
      col = as.character(genre.label.data$label_color),
      bgcol = hsv(h=0.8,s=.3,v=(.5*(0.3+code.distances(character.SOM)))),
      labels = genre.label.data$label,
-     main = "Shakespearean Characters")
+     main = "Shakespearean Characters - colored by genre")
 ```
 
 There are some apparent clusters. Recall that we are using a toroidal SOM for this example, so the left and right edges and the top and bottom edges are identified. As in [part 1](https://clarkdatalabs.github.io/soms/SOM_Shakespeare_Part_1), background color signifies a cell's distance from neighboring cells. Dark cells are much closer to their neighbors than lighter colored cells. 
 
-Even to a Shakespearean neophyte such as myself, using this SOM to do some exploration reveals a couple interesting features. Romeo and Juliet are very close to each other linguistically, as we might have expected. King Henry, on the other hand, is pretty dissimilar from himself across the multiple plays in which he is a character. 
+Even to a Shakespearean neophyte such as myself, using this SOM to do some exploration reveals a couple interesting features. Romeo and Juliet are very close to each other linguistically, as we might have expected. King Henry, on the other hand, is pretty dissimilar from himself across the multiple plays in which he is a character. Cool!
+
+#SOM - Other Ideas
+Following the above example, it's easy to instead color each character using a different criterion. In our `character_table` we have the play that a character appears in as a readily available distinction.
+```{r,}
+palette.37 <- rainbow(37)
+```
+We'll omit the rest of the code, since it mirrors the example above.
+```{r, echo=FALSE}
+
+dim.symbols <- function(x){
+  if (nchar(x)<2) {return(0.5)}
+  else {return(1)}
+}
+
+play.label.data <- 
+  cbind(char = character.DTM_df$char,
+        label = character.labels, 
+        base_color = palette.37[as.factor(character.DTM_df$play)],
+        transparency = lapply(character.labels,dim.symbols))
+
+play.label.data <- as.data.frame(play.label.data)
+
+label.colors <- c()
+for (row in 1:nrow(play.label.data)){
+  label.colors[row] <- adjustcolor(play.label.data[row,"base_color"], alpha.f = play.label.data[row,"transparency"])
+}
+
+play.label.data <- cbind(play.label.data, label_color = label.colors)
+remove(row, label.colors)
+```
+
+```{r, tidy=FALSE, echo=FALSE}
+par(bg = hsv(h=0,s=0,v=.7), font = 1, cex = 1.2)
+plot(character.SOM, 
+     type = "mapping",
+     col = as.character(play.label.data$label_color),
+     bgcol = hsv(h=0.8,s=.3,v=(.5*(0.3+code.distances(character.SOM)))),
+     labels = play.label.data$label,
+     main = "Shakespearean Characters - colored by play")
+```
+
+This is clearly not particularly useful, but this method suggests a few other ideas that you might want to explore:
+
+1. **color by character gender** - How different do characters of different gender speak in Shakespeare's plays? If there is a pattern, are there any significant outliers? You could either go through the entire table of 1300+ characters and assign each one a gender, or use these data to experiment with the [gender package](https://cran.r-project.org/web/packages/gender/gender.pdf), which predicts gender based on an input name and date range (the gender of names [has not been static over time](http://schwitzsplinters.blogspot.com/2009/01/gender-migration-of-names.html)).
+2. **color characters by date first published** - How did Shakespear's language change over time? Would a SOM show a difference in how characters spoke over time? There is [some ambiguity](https://en.wikipedia.org/wiki/Chronology_of_Shakespeare%27s_plays#Introduction) in dating Shakespearean plays, but [estimated figures](http://www.shakespeare-online.com/keydates/playchron.html) exist and could be easily used to make temporal groupings (e.g. "early, middle, late").
