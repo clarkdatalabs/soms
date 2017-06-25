@@ -155,7 +155,7 @@ We're going to be training our SOM using the rows of our document term matrix as
 ```{r}
 library(kohonen)
 
-play.SOM <- som(play.DTM.modified, grid = somgrid(6,6, "hexagonal"),  toroidal = FALSE)
+play.SOM <- som(play.DTM.modified, grid = somgrid(6,6, "hexagonal",  toroidal = FALSE))
 plot(play.SOM)
 ```
 
@@ -204,13 +204,13 @@ for (i in 1:nrow(play_table)){
 Next, we want to essentially combine two types of kohonen SOM functions, `mapping` and `dist.neighbours`. To do this we will write our own function to calculate the distance of a cell's representative vector to all others, strongly weighing the neighboring cells. We'll then use this to set the background color using the `mapping` type SOM. Don't worry about the details.
 ```{r}
 code.distances <- function(SOM){
-  N <- nrow(SOM$codes)
+  N <- nrow(SOM$codes[[1]])
   #calculate all pairwise distances
   pairwise.distances = c()
   for (i in 1:N){
     list <- matrix()
     for (j in 1:N){
-      list[j] <- dist(rbind(SOM$codes[i,],SOM$codes[j,]))
+      list[j] <- dist(rbind(SOM$codes[[1]][i,],SOM$codes[[1]][j,]))
     }
     pairwise.distances <- cbind(pairwise.distances, list)
   }

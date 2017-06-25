@@ -137,7 +137,7 @@ Plotting using `type = "codes"` we get the standard side by side visualization t
 ```{r}
 par(mfrow = c(1,2))
 plot(NBA.SOM4, type = "codes", main = c("Codes X", "Codes Y"))
-NBA.SOM4.hc <- cutree(hclust(dist(NBA.SOM4$codes$Y)), 5)
+NBA.SOM4.hc <- cutree(hclust(dist(NBA.SOM4$codes[[1]])), 5)
 add.cluster.boundaries(NBA.SOM4, NBA.SOM4.hc)
 ```
 
