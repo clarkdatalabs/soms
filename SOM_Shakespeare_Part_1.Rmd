@@ -20,6 +20,15 @@ Since that post, I've been playing with around with text mining and a corpus of 
 
 This tutorial is designed so that no files need to be downloaded seperately from this document. Run code blocks sequentially to follow along.
 
+#VERSION WARNING
+This tutorial was written using the `kohonen` package version 2.0.19. Some of the code will not work in the most recent version of this package. To install 2.0.19, run the following:
+```{r, eval = FALSE}
+packageurl <- "https://cran.r-project.org/src/contrib/Archive/kohonen/kohonen_2.0.19.tar.gz"
+install.packages(packageurl, repos=NULL, type="source")
+```
+
+I hope to update all of the SOM tutorials to run properly on `kohonen` v3 in the near future.
+
 #Shakespeare's Dramas
 The following script downloads a zipped folder containing all of the text of 37 of Shakespeare's plays (originally [available at lexically.net](http://lexically.net/wordsmith/support/shakespeare.html)). It sets up a table (`play_table`) which contains all of the information we will be working with, including the complete text of each play.
 
