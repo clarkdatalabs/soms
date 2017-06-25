@@ -13,6 +13,15 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, tidy = TRUE, fig.align='center', message = FALSE, warning = FALSE)
 ```
+#VERSION WARNING
+This tutorial was written using the `kohonen` package version 2.0.19. Some of the code will not work in the most recent version of this package. To install 2.0.19, run the following:
+```{r, eval = FALSE}
+packageurl <- "https://cran.r-project.org/src/contrib/Archive/kohonen/kohonen_2.0.19.tar.gz"
+install.packages(packageurl, repos=NULL, type="source")
+```
+
+I hope to update all of the SOM tutorials to run properly on `kohonen` v3 in the near future.
+
 #Inroduction
 
 [Self Organizing Maps](https://en.wikipedia.org/wiki/Self-organizing_map "Wikipedia: Self-organizing map") (SOMs) are a tool for visualizing patterns in high dimensional data by producing a 2 dimensional representation, which (hopefully) displays meaningful patterns in the higher dimensional structure. SOMs are "trained" with the given data (or a sample of your data) in the following way:
